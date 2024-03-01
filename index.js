@@ -1,10 +1,17 @@
-var express = require("express")
-require("dotenv").config();
-var { createHandler } = require("graphql-http/lib/use/express")
-var { buildSchema } = require("graphql")
-var { ruruHTML } = require("ruru/server")
-const db=require('./db_config/db.js');
-const UserModel = require('./models/UserModel.js');
+import express from "express";
+import dotenv from "dotenv";
+
+dotenv.config();
+
+import { ApolloServer } from "@apollo/server";
+import { startStandaloneServer } from "@apollo/server/standalone";
+
+
+// const db=require('./db_config/db.js');
+// const UserModel = require('./models/UserModel.js');
+// import the above two lines from db_config/db.js and models/UserModel.js
+import db from "./db_config/db.js";
+import UserModel from "./models/UserModel.js";
 
 // Test the connection
 db.sync()
@@ -14,52 +21,51 @@ db.sync()
   .catch((error) => {
     console.error('Unable to connect to the database:', error);
   });
-// Construct a schema, using GraphQL schema language
-var schema = buildSchema(`
+
+const typeDefs = `#graphql
+  type Book {
+    name: String
+    author: String
+  }
   type Query {
     hello: String
-    users: [User]
-    getUserById(id: ID!): User
+    books: [Book]
+    vungChung(author:String): [Book]
   }
-    type User {
-        id: ID
-        name: String
-        email: String
-    }
-`)
+`;
 
-// The root provides a resolver function for each API endpoint
-var root = {
-  hello: () => {
-    return "Hello world!"
+const books = [
+  {
+    name: "Harry Potter and the Chamber of Secrets",
+    author: "J.K. Rowling",
   },
-    users: async () => {
-        return await UserModel.findAll();
+  {
+    name: "Jurassic Park",
+    author: "Michael Crichton",
+  },
+];
+
+const resolvers = {
+  Query: {
+    hello: () => "world",
+    books: () => books,
+    vungChung: async (parent, args, context, info) => {
+      
+      const { author } = args;
+      const result = books.filter((book) => book.author === author);
+      return result;
     }
-    ,
-    getUserById: async (args) => {
-        console.log(args);
-        return await UserModel.findByPk(args.id);
-    }
-}
+  },
+};
 
-var app = express()
+const server = new ApolloServer({
+  typeDefs,
+  resolvers,
+});
 
-// Create and use the GraphQL handler.
-app.all(
-  "/graphql",
-  createHandler({
-    schema: schema,
-    rootValue: root,
-  })
-)
 
-// Serve the GraphiQL IDE.
-app.get("/", (_req, res) => {
-  res.type("html")
-  res.end(ruruHTML({ endpoint: "/graphql" }))
-})
+const { url } = await startStandaloneServer(server, {
+  listen: { port: 4000 },
+});
 
-// Start the server at port
-app.listen(4000)
-console.log("Running a GraphQL API server at http://localhost:4000/graphql")
+console.log(`🚀  Server ready at: ${url}`);
